@@ -33,7 +33,7 @@ export function newId(prefix, rng = Math.random) {
 // ---- API dispatch -------------------------------------------------------
 // Action registry: name -> (req, store, deps) => data. Later tasks add entries
 // via registerAction(). Handlers return data (wrapped as {ok:true,data}) or
-// throw nothing; auth/CRUD tasks may return {ok:false,error} directly.
+// a full {ok,error} envelope (auth/CRUD tasks may return errors directly).
 export const ACTIONS = {};
 // Actions reachable without a valid obscurity token.
 export const PUBLIC_ACTIONS = new Set(['bootstrapStatus']);
