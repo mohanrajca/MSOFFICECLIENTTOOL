@@ -18,13 +18,19 @@ const call = (store, action, payload = {}, extra = {}) =>
   handle({ action, token: TOKEN, payload, ...extra }, store, deps);
 
 function setup(store = mk()) {
+  hashesOf = () => store.readTable('Users').map((u) => u.PassHash).filter(Boolean);
   const r = call(store, 'setupAdmin', { name: 'Admin One', username: 'admin', password: 'pw-admin' });
   return { store, r, session: r.data.session };
 }
 function addStaff(store, adminSession, over = {}) {
   return call(store, 'upsertUser', { name: 'Staff', username: 'staff', password: 'pw-staff', role: 'Staff', ...over }, { session: adminSession });
 }
-const noHash = (o) => expect(JSON.stringify(o)).not.toMatch(/PassHash/i);
+let hashesOf = () => [];
+const noHash = (o) => {
+  const j = JSON.stringify(o);
+  expect(j).not.toMatch(/PassHash/i);
+  for (const h of hashesOf()) expect(j).not.toContain(h);
+};
 
 describe('setupAdmin', () => {
   test('creates first Admin, logs in, then refuses', () => {
@@ -173,5 +179,37 @@ describe('updateProfile', () => {
   test('requires session', () => {
     const { store } = setup();
     expect(call(store, 'updateProfile', { name: 'x' })).toEqual({ ok: false, error: 'forbidden' });
+  });
+});
+
+describe('last-admin invariant', () => {
+  test('self-demote and self-deactivate via upsertUser rejected for last active Admin', () => {
+    const { store, session } = setup();
+    const id = store.readTable('Users')[0].UserID;
+    expect(call(store, 'upsertUser', { userId: id, role: 'Staff' }, { session })).toEqual({ ok: false, error: 'last_admin' });
+    expect(call(store, 'upsertUser', { userId: id, active: false }, { session })).toEqual({ ok: false, error: 'last_admin' });
+    expect(store.readTable('Users')[0]).toMatchObject({ Role: 'Admin', Active: true });
+  });
+  test('same operations succeed when another active Admin exists', () => {
+    const { store, session } = setup();
+    const id = store.readTable('Users')[0].UserID;
+    const a2 = addStaff(store, session, { username: 'admin2', role: 'Admin' }).data;
+    expect(call(store, 'upsertUser', { userId: id, role: 'Staff' }, { session }).data.Role).toBe('Staff');
+    // admin1 is now Staff; its session has no Admin rights
+    const s2 = call(store, 'login', { username: 'admin2', password: 'pw-staff' }).data.session;
+    expect(call(store, 'upsertUser', { userId: id, role: 'Admin' }, { session: s2 }).ok).toBe(true);
+    expect(call(store, 'upsertUser', { userId: id, active: false }, { session: s2 }).data.Active).toBe(false);
+    // admin2 is now the last active Admin
+    expect(call(store, 'upsertUser', { userId: a2.UserID, active: false }, { session: s2 }).error).toBe('last_admin');
+  });
+  test('blank / odd Active counts as inactive', () => {
+    const { store } = setup();
+    store.appendRow('Users', { Name: 'B', Username: 'blank', PassHash: 's:x', Role: 'Staff', Active: '' });
+    expect(call(store, 'login', { username: 'blank', password: 'x' }).error).toBe('bad_login');
+    const salt = 'q';
+    store.updateRowById('Users', 'UserID', store.readTable('Users')[1].UserID, { PassHash: salt + ':' + deps.hashFn(salt, 'x') });
+    expect(call(store, 'login', { username: 'blank', password: 'x' }).error).toBe('inactive');
+    store.updateRowById('Users', 'UserID', store.readTable('Users')[1].UserID, { Active: 'TRUE' });
+    expect(call(store, 'login', { username: 'blank', password: 'x' }).ok).toBe(true);
   });
 });

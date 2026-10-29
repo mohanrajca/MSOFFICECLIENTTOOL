@@ -78,7 +78,7 @@ registerAction('getMasters', (req, store) => {
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const ROLES = ['Admin', 'Staff'];
 const str = (v) => (v === undefined || v === null ? '' : String(v));
-const isActive = (u) => !(u.Active === false || /^(false|0|no)$/i.test(str(u.Active).trim()));
+const isActive = (u) => u.Active === true || u.Active === 1 || /^(true|1)$/i.test(str(u.Active).trim());
 const sameUsername = (a, b) => str(a).trim().toLowerCase() === str(b).trim().toLowerCase();
 
 // Never returns PassHash: whitelist projection.
@@ -205,6 +205,12 @@ registerAction('upsertUser', (req, store, deps) => {
   if (!name || !username || !ROLES.includes(role)) return { ok: false, error: 'invalid_input' };
   if (users.some((u) => u !== existing && String(u.UserID) !== String(base.UserID) && sameUsername(u.Username, username))) {
     return { ok: false, error: 'username_taken' };
+  }
+  // Never leave zero active Admins: block demoting / deactivating the last one.
+  if (existing && isActive(existing) && existing.Role === 'Admin') {
+    const losesAdmin = role !== 'Admin' || (p.active !== undefined && !p.active);
+    const others = users.filter((u) => String(u.UserID) !== String(existing.UserID) && isActive(u) && u.Role === 'Admin');
+    if (losesAdmin && others.length === 0) return { ok: false, error: 'last_admin' };
   }
   const fields = { Name: name, Username: username, Role: role };
   if (p.contact !== undefined) fields.Contact = str(p.contact).trim();
