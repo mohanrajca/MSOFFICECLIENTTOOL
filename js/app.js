@@ -5,6 +5,9 @@ import { renderSetup, renderLogin, logout } from './auth-ui.js';
 import { ROUTES, startRouter } from './router.js';
 import './views/vault.js';
 import './views/visitors.js';
+import './views/clients.js';
+import './views/filings.js';
+import './views/dashboard.js';
 import { esc } from './dom.js';
 
 const root = document.getElementById('app');

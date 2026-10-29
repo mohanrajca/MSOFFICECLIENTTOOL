@@ -94,3 +94,23 @@ code { background: var(--bg); padding: 1px 6px; border-radius: 6px; }
 .cash-lines .strong { font-weight: 700; font-size: 17px; }
 .vis-table { width: 100%; }
 @media (max-width: 760px) { .vis-grid { grid-template-columns: minmax(0, 1fr); } .vis-fields { grid-template-columns: minmax(0, 1fr); } }
+
+/* clients / filings / dashboard */
+.list-card, .form-card { margin-top: 14px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 14px; }
+.field select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font: inherit; background: var(--surface); }
+.row-actions { white-space: nowrap; } .row-actions .btn { padding: 5px 10px; margin-right: 4px; }
+.dash-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.dash-main, .dash-side { display: grid; gap: 14px; min-width: 0; }
+.dash-main > .card h3, .dash-side .card h3 { margin: 0 0 10px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--c-others); border-radius: var(--radius); padding: 14px 16px; box-shadow: 0 1px 2px rgba(15,23,42,.05); }
+.kpi.k-it { border-left-color: var(--c-it); } .kpi.k-gst { border-left-color: var(--c-gst); } .kpi.k-mca { border-left-color: var(--c-mca); } .kpi.k-others { border-left-color: var(--c-others); }
+.kpi span { display: block; font-size: 12px; color: var(--muted); } .kpi strong { display: block; font-size: 26px; color: var(--navy); } .kpi small { font-size: 12px; }
+.dash-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.chart-box { position: relative; height: 220px; }
+.legend { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+.due-list { list-style: none; margin: 0; padding: 0; } .due-list li { padding: 8px 0; border-bottom: 1px solid var(--border); }
+@media (max-width: 900px) { .dash-grid { grid-template-columns: minmax(0, 1fr); } }
+.dash-title { margin: 0 0 12px; }

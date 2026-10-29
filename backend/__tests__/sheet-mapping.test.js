@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, test, expect } from 'vitest';
 import {
-  CLIENT_HEADERS, normalizeName, clientRowToCanonical, currentPasswordMap, matchClientPassword,
+  CLIENT_HEADERS, normalizeName, clientRowToCanonical, currentPasswordMap, matchClientPassword, gstStatusRowsToFilings,
 } from '../sheet-mapping.js';
 
 const row = {
@@ -61,5 +61,35 @@ describe('sheet-mapping', () => {
     expect(c.GSTIN).toBe('33AAA');
     const m = currentPasswordMap([{ 'CLIENT ': 'Y', 'Password ': 'pw' }]);
     expect(m).toEqual({ y: 'pw' });
+  });
+});
+
+describe('gstStatusRowsToFilings', () => {
+  const map = { '33ABCDE1234F1Z5': 'C001' };
+  const row = (o) => ({ 'Client GSTIN': '33ABCDE1234F1Z5', 'Client Name': 'Acme', Period: '2026-09', Month: 'Sep', Year: '2026',
+    'GSTR1 Due': '2026-10-11', 'GSTR1 Filed': '2026-10-09', 'GSTR1 Status': 'Filed',
+    'GSTR3B Due': '2026-10-20', 'GSTR3B Filed': '', 'GSTR3B Status': '', ...o });
+
+  test('emits a GSTR-1 and a GSTR-3B filing per row; blank status -> Pending', () => {
+    const out = gstStatusRowsToFilings([row()], map);
+    expect(out).toEqual([
+      { ClientID: 'C001', Portal: 'GST', ReturnType: 'GSTR-1', Period: '2026-09', DueDate: '2026-10-11', FiledDate: '2026-10-09', Status: 'Filed' },
+      { ClientID: 'C001', Portal: 'GST', ReturnType: 'GSTR-3B', Period: '2026-09', DueDate: '2026-10-20', FiledDate: '', Status: 'Pending' },
+    ]);
+  });
+  test('blank GSTR-3B data yields only the GSTR-1 filing', () => {
+    const out = gstStatusRowsToFilings([row({ 'GSTR3B Due': '', 'GSTR3B Filed': '', 'GSTR3B Status': '' })], map);
+    expect(out.map((f) => f.ReturnType)).toEqual(['GSTR-1']);
+  });
+  test('unknown GSTIN -> blank ClientID flagged Unmatched, no crash', () => {
+    const out = gstStatusRowsToFilings([row({ 'Client GSTIN': '99ZZZZZ' })], map);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({ ClientID: '', Unmatched: true });
+    expect(gstStatusRowsToFilings(null, null)).toEqual([]);
+  });
+  test('GSTIN match is trimmed/case-insensitive; keys with stray spaces ok', () => {
+    const out = gstStatusRowsToFilings([row({ 'Client GSTIN': ' 33abcde1234f1z5 ' })], map);
+    expect(out[0].ClientID).toBe('C001');
+    expect(out[0].Unmatched).toBeUndefined();
   });
 });

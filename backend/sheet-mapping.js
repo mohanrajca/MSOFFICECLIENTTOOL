@@ -57,3 +57,26 @@ export function matchClientPassword(canonicalClient, gstUserName, passwordMap) {
 }
 
 globalThis.SheetMapping = { CLIENT_HEADERS, normalizeName, clientRowToCanonical, currentPasswordMap, matchClientPassword };
+
+// Firm's per-period GST status rows -> Filing records (GSTR-1 and GSTR-3B). Pure; no live import yet.
+// gstinToClientId: { GSTIN: ClientID }. Unknown GSTIN -> ClientID '' and Unmatched: true.
+// A return with no Due/Filed/Status data in the row is skipped.
+export function gstStatusRowsToFilings(rows, gstinToClientId) {
+  const map = {};
+  for (const [k, v] of Object.entries(gstinToClientId || {})) map[cell(k).toUpperCase()] = v;
+  const out = [];
+  for (const raw of rows || []) {
+    const r = trimKeys(raw);
+    const gstin = cell(r['Client GSTIN']).toUpperCase();
+    const clientId = map[gstin];
+    for (const [tag, returnType] of [['GSTR1', 'GSTR-1'], ['GSTR3B', 'GSTR-3B']]) {
+      const due = cell(r[`${tag} Due`]); const filed = cell(r[`${tag} Filed`]); const status = cell(r[`${tag} Status`]);
+      if (!due && !filed && !status) continue;
+      const f = { ClientID: clientId === undefined ? '' : clientId, Portal: 'GST', ReturnType: returnType,
+        Period: cell(r['Period']), DueDate: due, FiledDate: filed, Status: status || 'Pending' };
+      if (clientId === undefined) f.Unmatched = true;
+      out.push(f);
+    }
+  }
+  return out;
+}

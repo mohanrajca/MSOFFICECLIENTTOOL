@@ -4,7 +4,7 @@
 // Canonical column names; first column of each tab is its id field.
 export const TABS = {
   Clients: ['ClientID', 'Name', 'GSTIN', 'TradeName', 'RegType', 'State', 'Address', 'Mobile', 'Email', 'FilingFrequency', 'Status'],
-  Filings: ['FilingID', 'ClientID', 'Portal', 'ReturnType', 'Period', 'FiledDate', 'AckNo', 'Status', 'FiledBy'],
+  Filings: ['FilingID', 'ClientID', 'Portal', 'ReturnType', 'Period', 'DueDate', 'FiledDate', 'AckNo', 'Status', 'FiledBy'],
   Credentials: ['CredID', 'ClientID', 'Portal', 'LoginID', 'Password', 'Notes', 'UpdatedBy', 'UpdatedOn'],
   Users: ['UserID', 'Name', 'Username', 'PassHash', 'Role', 'Contact', 'Active'],
   Visitors: ['VisitorID', 'Date', 'Category', 'VisitorCount', 'TaxAmt', 'FeesAmt', 'EnteredBy'],
