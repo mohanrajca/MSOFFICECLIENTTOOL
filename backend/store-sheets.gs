@@ -90,8 +90,23 @@ function createSheetStore(spreadsheet) {
   // Cell values to write: strings for text columns (kept literal by '@' format).
   function cellIn_(tab, col, v) {
     if (isEmpty_(v)) return '';
-    if (isNumericCol_(tab, col)) return Number(v);
+    if (isNumericCol_(tab, col)) {
+      var n = Number(v);
+      return isNaN(n) ? '' : n; // never write NaN
+    }
     return String(v);
+  }
+
+  // setValues does NOT auto-grow the grid (a new sheet has ~1000 rows), so grow it
+  // explicitly and re-apply per-column formats to the new rows (text '@' keeps =,+,-,@ literal).
+  function ensureCapacity_(sh, name, headers, neededRow) {
+    var max = sh.getMaxRows();
+    if (neededRow <= max) return;
+    var add = Math.max(500, neededRow - max);
+    sh.insertRowsAfter(max, add);
+    headers.forEach(function (h, i) {
+      sh.getRange(max + 1, i + 1, add, 1).setNumberFormat(isNumericCol_(name, h) ? '0.######' : '@');
+    });
   }
 
   return {
@@ -134,6 +149,7 @@ function createSheetStore(spreadsheet) {
         }
         var values = headers.map(function (h) { return out[h]; });
         var r = sh.getLastRow() + 1;
+        ensureCapacity_(sh, name, headers, r);
         sh.getRange(r, 1, 1, headers.length).setValues([values]);
         return rowToObj_(name, headers, values);
       });

@@ -11,11 +11,12 @@ The existing **CLIENT** and **CURRENT** tabs are never written; they are only re
 
 Windows PowerShell equivalent:
 
-    (Get-Content backendcore.js) -replace '^export ','' | Set-Content distcore.gs
+    New-Item -ItemType Directory -Force dist
+    (Get-Content backend\core.js) -replace '^export ','' | Set-Content dist\core.gs
 
 Safety check (must print nothing; the build script also fails on these):
 
-    grep -nE "^(export {|export default|import )" backend/core.js
+    grep -nE "^(export \{|export default|import )" backend/core.js
 
 core.js only uses `export function` / `export const` at column 0. It explicitly assigns every symbol the other
 files use (TABS, ID_PREFIX, newId, handle, registerAction, requireSession, ACTIONS, PUBLIC_ACTIONS) to `globalThis`,
