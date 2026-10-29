@@ -72,6 +72,161 @@ registerAction('getMasters', (req, store) => {
   return { portals, returnTypes };
 });
 
+// ---- Auth ---------------------------------------------------------------
+// PassHash = `${salt}:${hashFn(salt, password)}`. Session = `${urlenc(json)}.${hashFn(secret, json)}`
+// where json = {UserID, Role, exp}. All crypto goes through deps.hashFn.
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const ROLES = ['Admin', 'Staff'];
+const str = (v) => (v === undefined || v === null ? '' : String(v));
+const isActive = (u) => !(u.Active === false || /^(false|0|no)$/i.test(str(u.Active).trim()));
+const sameUsername = (a, b) => str(a).trim().toLowerCase() === str(b).trim().toLowerCase();
+
+// Never returns PassHash: whitelist projection.
+function safeUser(u) {
+  return {
+    UserID: u.UserID, Name: u.Name, Username: u.Username, Role: u.Role,
+    Contact: u.Contact === undefined ? '' : u.Contact, Active: isActive(u),
+  };
+}
+const sessionUser = (u) => ({ UserID: u.UserID, Name: u.Name, Role: u.Role });
+
+// Length-independent-ish constant-time string compare.
+function safeEq(a, b) {
+  a = str(a); b = str(b);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return diff === 0;
+}
+
+const hasSecret = (deps) => deps && typeof deps.sessionSecret === 'string' && deps.sessionSecret !== '';
+
+function makePassHash(deps, password) {
+  const salt = str(deps.randomFn());
+  return `${salt}:${deps.hashFn(salt, password)}`;
+}
+function checkPassword(deps, stored, password) {
+  const s = str(stored);
+  const i = s.indexOf(':');
+  if (i < 1) return false;
+  const salt = s.slice(0, i);
+  return safeEq(s.slice(i + 1), deps.hashFn(salt, str(password)));
+}
+
+function signSession(deps, user) {
+  const json = JSON.stringify({ UserID: user.UserID, Role: user.Role, exp: deps.now() + SESSION_TTL_MS });
+  return `${encodeURIComponent(json)}.${deps.hashFn(deps.sessionSecret, json)}`;
+}
+
+// Returns {UserID, Role} for a valid session, else null. Signature + expiry are
+// checked; when a store is supplied the user must still exist and be Active, and
+// Role is taken from the store (so demotion/deactivation take effect at once).
+export function requireSession(req, deps, store) {
+  try {
+    const tok = req && req.session;
+    if (typeof tok !== 'string' || !hasSecret(deps)) return null;
+    const dot = tok.lastIndexOf('.');
+    if (dot < 1) return null;
+    const json = decodeURIComponent(tok.slice(0, dot));
+    if (!safeEq(tok.slice(dot + 1), deps.hashFn(deps.sessionSecret, json))) return null;
+    const s = JSON.parse(json);
+    if (!s || typeof s.exp !== 'number' || deps.now() > s.exp || !s.UserID) return null;
+    if (store) {
+      const u = store.readTable('Users').find((r) => String(r.UserID) === String(s.UserID));
+      if (!u || !isActive(u)) return null;
+      return { UserID: u.UserID, Role: u.Role };
+    }
+    return { UserID: s.UserID, Role: s.Role };
+  } catch (e) {
+    return null;
+  }
+}
+
+const FORBIDDEN = { ok: false, error: 'forbidden' };
+const requireAdmin = (req, store, deps) => {
+  const me = requireSession(req, deps, store);
+  return me && me.Role === 'Admin' ? me : null;
+};
+const payloadOf = (req) => (req && req.payload && typeof req.payload === 'object' ? req.payload : {});
+
+registerAction('setupAdmin', (req, store, deps) => {
+  if (store.readTable('Users').length > 0) return { ok: false, error: 'already_setup' };
+  const { name, username, password } = payloadOf(req);
+  if (!str(name).trim() || !str(username).trim() || !str(password)) return { ok: false, error: 'invalid_input' };
+  if (!hasSecret(deps)) return { ok: false, error: 'server_misconfigured' };
+  const row = store.appendRow('Users', {
+    Name: str(name).trim(), Username: str(username).trim(), PassHash: makePassHash(deps, str(password)),
+    Role: 'Admin', Contact: '', Active: true,
+  });
+  return { session: signSession(deps, row), user: sessionUser(row) };
+});
+
+registerAction('login', (req, store, deps) => {
+  const { username, password } = payloadOf(req);
+  if (!hasSecret(deps)) return { ok: false, error: 'server_misconfigured' };
+  const u = store.readTable('Users').find((r) => sameUsername(r.Username, username) && str(username).trim() !== '');
+  // Hash even for unknown users so both failure paths do the same work.
+  const good = checkPassword(deps, u ? u.PassHash : `x:${'0'.repeat(8)}`, password);
+  if (!u || !good) return { ok: false, error: 'bad_login' };
+  if (!isActive(u)) return { ok: false, error: 'inactive' };
+  return { session: signSession(deps, u), user: sessionUser(u) };
+});
+
+registerAction('updateProfile', (req, store, deps) => {
+  const me = requireSession(req, deps, store);
+  if (!me) return FORBIDDEN;
+  const p = payloadOf(req);
+  const patch = {};
+  if (p.name !== undefined) {
+    if (!str(p.name).trim()) return { ok: false, error: 'invalid_input' };
+    patch.Name = str(p.name).trim();
+  }
+  if (p.contact !== undefined) patch.Contact = str(p.contact).trim();
+  if (p.password !== undefined && p.password !== '') patch.PassHash = makePassHash(deps, str(p.password));
+  return safeUser(store.updateRowById('Users', 'UserID', me.UserID, patch));
+});
+
+registerAction('listUsers', (req, store, deps) => {
+  if (!requireAdmin(req, store, deps)) return FORBIDDEN;
+  return store.readTable('Users').map(safeUser);
+});
+
+registerAction('upsertUser', (req, store, deps) => {
+  if (!requireAdmin(req, store, deps)) return FORBIDDEN;
+  const p = payloadOf(req);
+  const users = store.readTable('Users');
+  const existing = p.userId ? users.find((u) => String(u.UserID) === String(p.userId)) : null;
+  if (p.userId && !existing) return { ok: false, error: 'not_found' };
+  const base = existing || {};
+  const name = p.name !== undefined ? str(p.name).trim() : str(base.Name);
+  const username = p.username !== undefined ? str(p.username).trim() : str(base.Username);
+  const role = p.role !== undefined ? p.role : base.Role;
+  if (!name || !username || !ROLES.includes(role)) return { ok: false, error: 'invalid_input' };
+  if (users.some((u) => u !== existing && String(u.UserID) !== String(base.UserID) && sameUsername(u.Username, username))) {
+    return { ok: false, error: 'username_taken' };
+  }
+  const fields = { Name: name, Username: username, Role: role };
+  if (p.contact !== undefined) fields.Contact = str(p.contact).trim();
+  if (p.password !== undefined && p.password !== '') fields.PassHash = makePassHash(deps, str(p.password));
+  if (existing) {
+    if (p.active !== undefined) fields.Active = !!p.active;
+    return safeUser(store.updateRowById('Users', 'UserID', existing.UserID, fields));
+  }
+  if (!fields.PassHash) return { ok: false, error: 'invalid_input' };
+  return safeUser(store.appendRow('Users', { ...fields, Contact: fields.Contact || '', Active: p.active === undefined ? true : !!p.active }));
+});
+
+registerAction('deactivateUser', (req, store, deps) => {
+  const me = requireAdmin(req, store, deps);
+  if (!me) return FORBIDDEN;
+  const { userId } = payloadOf(req);
+  if (!store.readTable('Users').some((u) => String(u.UserID) === String(userId))) return { ok: false, error: 'not_found' };
+  if (String(userId) === String(me.UserID)) return { ok: false, error: 'cannot_deactivate_self' };
+  return safeUser(store.updateRowById('Users', 'UserID', userId, { Active: false }));
+});
+
+globalThis.requireSession = requireSession;
 globalThis.TABS = TABS;
 globalThis.handle = handle;
 globalThis.registerAction = registerAction;
