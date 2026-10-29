@@ -1,5 +1,6 @@
 import { apiCall, apiError } from './api.js';
 import { setSession, clearSession } from './session.js';
+import { lockVault } from './views/vault.js';
 
 function field(label, name, type, extra = '') {
   return `<label class="field"><span>${label}</span><input name="${name}" type="${type}" ${extra}></label>`;
@@ -68,6 +69,7 @@ export function renderLogin(root, onAuthed) {
 }
 
 export function logout() {
+  lockVault();
   clearSession();
   location.hash = '';
   location.reload();

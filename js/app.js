@@ -4,10 +4,10 @@ import { currentUser, getSession } from './session.js';
 import { renderSetup, renderLogin, logout } from './auth-ui.js';
 import { ROUTES, startRouter } from './router.js';
 import './views/vault.js';
+import { esc } from './dom.js';
 
 const root = document.getElementById('app');
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 
 function renderNotConfigured() {
   root.innerHTML = `<div class="auth-wrap"><div class="auth-card">

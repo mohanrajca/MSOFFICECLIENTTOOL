@@ -5,7 +5,8 @@
 import { apiCall, apiError } from '../api.js';
 import { registerView } from '../router.js';
 import { getSession, requireRole } from '../session.js';
-import { encryptSecret, decryptSecret, isCiphertext, WrongKeyError } from '../crypto.js';
+import { initCrypto, encryptSecret, decryptSecret, isCiphertext, WrongKeyError } from '../crypto.js';
+import { esc } from '../dom.js';
 
 const PORTALS = ['IT', 'GST', 'MCA', 'TRACES', 'Other'];
 const REVEAL_MS = 30000;
@@ -16,7 +17,6 @@ let keySession = null;     // the login session the key was entered under
 export function lockVault() { masterKey = null; keySession = null; }
 export function isUnlocked() { return masterKey !== null; }
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 const isAdmin = () => requireRole('Admin');
 
 // Retire the key if the signed-in session changed (logout/login as someone else).
@@ -26,10 +26,10 @@ function checkSession() {
 
 // A mistyped key must never be accepted when ciphertext already exists, otherwise new
 // entries would be encrypted under a different key. Returns true if the key is usable.
-function keyMatchesVault(key, creds) {
+async function keyMatchesVault(key, creds) {
   const sample = creds.find((c) => isCiphertext(c.Password));
   if (!sample) return true; // empty vault: first key defines the vault
-  try { decryptSecret(sample.Password, key); return true; } catch (e) {
+  try { await decryptSecret(sample.Password, key); return true; } catch (e) {
     if (e instanceof WrongKeyError) return false;
     throw e;
   }
@@ -40,6 +40,7 @@ export async function renderVault(container) {
   container.innerHTML = '<div class="card"><h2>Credential Vault</h2><p class="muted">Loading…</p></div>';
   let clients, creds;
   try {
+    await initCrypto();
     [clients, creds] = await Promise.all([apiCall('listClients', {}), apiCall('listCredentials', {})]);
   } catch (e) {
     container.innerHTML = `<div class="card"><h2>Credential Vault</h2><div class="form-error" role="alert">${esc(apiError(e))}</div></div>`;
@@ -50,21 +51,26 @@ export async function renderVault(container) {
 }
 
 function renderGate(container, clients, creds) {
+  const firstUse = !creds.some((c) => isCiphertext(c.Password));
   container.innerHTML = `<div class="card vault-gate"><h2>Credential Vault</h2>
     <p class="muted">Enter the master key to unlock. It is kept in this browser tab's memory only and is never sent to the server.</p>
     <form id="gate" autocomplete="off">
       <label class="field"><span>Master key</span><input name="mk" type="password" autocomplete="off" required></label>
+      ${firstUse ? `<label class="field"><span>Confirm master key</span><input name="mk2" type="password" autocomplete="off" required></label>
+      <p class="muted">There is no recovery if you forget this key: every saved password becomes unreadable.</p>` : ''}
       <div class="form-error" role="alert" hidden></div>
       <button class="btn primary" type="submit">Unlock vault</button>
     </form></div>`;
   const form = container.querySelector('#gate');
   const err = form.querySelector('.form-error');
-  form.addEventListener('submit', (ev) => {
+  form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const key = form.mk.value;
-    form.mk.value = '';
+    const confirmKey = form.mk2 ? form.mk2.value : key;
+    form.mk.value = ''; if (form.mk2) form.mk2.value = '';
     if (!key.trim()) { err.textContent = 'Enter the master key.'; err.hidden = false; return; }
-    if (!keyMatchesVault(key, creds)) { err.textContent = 'Wrong master key'; err.hidden = false; return; }
+    if (firstUse && key !== confirmKey) { err.textContent = 'The two master keys do not match.'; err.hidden = false; return; }
+    if (!(await keyMatchesVault(key, creds))) { err.textContent = 'Wrong master key'; err.hidden = false; return; }
     masterKey = key; keySession = getSession();
     renderMain(container, clients, creds);
   });
@@ -76,7 +82,7 @@ function credRow(c, admin) {
     <td>${esc(c.Portal)}</td><td>${esc(c.LoginID)}</td>
     <td class="pw-cell">${enc
       ? '<button class="btn reveal" type="button">Reveal</button>'
-      : '<span class="muted">Not encrypted - re-save to encrypt</span>'}</td>
+      : '<span class="muted">Stored unencrypted - an Admin must Edit it and retype the password to encrypt</span>'}</td>
     <td class="actions">${admin ? '<button class="btn edit" type="button">Edit</button> <button class="btn del" type="button">Delete</button>' : ''}</td>
   </tr>`;
 }
@@ -128,12 +134,12 @@ function renderMain(container, clients, creds) {
         if (out) out.remove();
         btn.textContent = 'Reveal';
       };
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         show('');
         if (cell.querySelector('.pw-plain')) return hide();
         if (masterKey === null) return reload();
         try {
-          const plain = decryptSecret(cred.Password, masterKey);
+          const plain = await decryptSecret(cred.Password, masterKey);
           const out = document.createElement('code');
           out.className = 'pw-plain';
           out.textContent = plain;
@@ -178,7 +184,7 @@ function renderMain(container, clients, creds) {
       try {
         const body = { ClientID: f.client.value, Portal: f.portal.value, LoginID: f.login.value.trim() };
         if (cred) body.CredID = cred.CredID;
-        if (f.pw.value) body.Password = encryptSecret(f.pw.value, masterKey); // ciphertext only
+        if (f.pw.value) body.Password = await encryptSecret(f.pw.value, masterKey); // ciphertext only
         else if (!cred) throw new Error('Enter a password.');
         f.pw.value = '';
         await apiCall('upsertCredential', body);
@@ -200,7 +206,7 @@ function renderMain(container, clients, creds) {
         if (have.has(key)) { already++; continue; }
         await apiCall('upsertCredential', {
           ClientID: m.ClientID, Portal: m.Portal, LoginID: m.LoginID,
-          Password: encryptSecret(m.password, masterKey),
+          Password: await encryptSecret(m.password, masterKey),
         });
         have.add(key); encrypted++;
       }
