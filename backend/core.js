@@ -232,6 +232,101 @@ registerAction('deactivateUser', (req, store, deps) => {
   return safeUser(store.updateRowById('Users', 'UserID', userId, { Active: false }));
 });
 
+// ---- CRUD ---------------------------------------------------------------
+// Every action requires a valid session. Stored values pass through untouched
+// (Credentials.Password is opaque ciphertext: stored/returned verbatim).
+const anySession = (req, store, deps) => requireSession(req, deps, store);
+const nowIso = (deps) => {
+  const t = deps.now();
+  return typeof t === 'number' ? new Date(t).toISOString() : str(t);
+};
+const same = (a, b) => String(a) === String(b);
+
+// Pick only the table's columns from the payload; undefined -> ''.
+function pickFields(tab, p, overrides = {}) {
+  const out = {};
+  for (const col of TABS[tab]) {
+    if (Object.prototype.hasOwnProperty.call(p, col)) out[col] = p[col] === undefined ? '' : p[col];
+  }
+  for (const [k, v] of Object.entries(overrides)) out[k] = v === undefined ? '' : v;
+  return out;
+}
+
+// Update when payload carries an existing id, else append.
+function upsertById(store, tab, p, overrides) {
+  const idField = TABS[tab][0];
+  const fields = pickFields(tab, p, overrides);
+  const id = fields[idField];
+  if (id !== undefined && id !== '' && store.readTable(tab).some((r) => same(r[idField], id))) {
+    delete fields[idField];
+    return store.updateRowById(tab, idField, id, fields);
+  }
+  return store.appendRow(tab, fields);
+}
+
+function deleteById(store, tab, id) {
+  const idField = TABS[tab][0];
+  if (id === undefined || id === null || id === '' || !store.readTable(tab).some((r) => same(r[idField], id))) {
+    return { ok: false, error: 'not_found' };
+  }
+  store.deleteRowById(tab, idField, id);
+  return { deleted: String(id) };
+}
+
+function defineCrud(tab, names, { listFilter, listGuard = anySession, writeGuard = anySession, stamp, idKey }) {
+  registerAction(names.list, (req, store, deps) => {
+    if (!listGuard(req, store, deps)) return FORBIDDEN;
+    const q = payloadOf(req);
+    const rows = store.readTable(tab);
+    return listFilter ? rows.filter((r) => listFilter(r, q)) : rows;
+  });
+  registerAction(names.upsert, (req, store, deps) => {
+    const me = writeGuard(req, store, deps);
+    if (!me) return FORBIDDEN;
+    return upsertById(store, tab, payloadOf(req), stamp ? stamp(me, deps) : {});
+  });
+  if (names.del) {
+    registerAction(names.del, (req, store, deps) => {
+      if (!writeGuard(req, store, deps)) return FORBIDDEN;
+      return deleteById(store, tab, payloadOf(req)[idKey]);
+    });
+  }
+}
+
+const byClient = (r, q) => q.clientId === undefined || q.clientId === null || q.clientId === '' || same(r.ClientID, q.clientId);
+
+defineCrud('Clients', { list: 'listClients', upsert: 'upsertClient', del: 'deleteClient' }, { idKey: 'clientId' });
+defineCrud('Filings', { list: 'listFilings', upsert: 'upsertFiling', del: 'deleteFiling' }, {
+  idKey: 'filingId', listFilter: byClient, stamp: (me) => ({ FiledBy: me.UserID }),
+});
+defineCrud('Credentials', { list: 'listCredentials', upsert: 'upsertCredential', del: 'deleteCredential' }, {
+  idKey: 'credId', listFilter: byClient, writeGuard: requireAdmin,
+  stamp: (me, deps) => ({ UpdatedBy: me.UserID, UpdatedOn: nowIso(deps) }),
+});
+defineCrud('Visitors', { list: 'listVisitors', upsert: 'upsertVisitor' }, {
+  stamp: (me) => ({ EnteredBy: me.UserID }),
+  listFilter: (r, q) => {
+    if (q.date) return same(r.Date, q.date);
+    if (q.month) return str(r.Date).startsWith(str(q.month));
+    return true;
+  },
+});
+
+registerAction('getDayBalance', (req, store, deps) => {
+  if (!anySession(req, store, deps)) return FORBIDDEN;
+  const { date } = payloadOf(req);
+  return store.readTable('DayBalances').find((r) => same(r.Date, date)) || null;
+});
+
+registerAction('setDayBalance', (req, store, deps) => {
+  if (!anySession(req, store, deps)) return FORBIDDEN;
+  const p = payloadOf(req);
+  if (!str(p.Date).trim()) return { ok: false, error: 'invalid_input' };
+  const fields = pickFields('DayBalances', p);
+  const exists = store.readTable('DayBalances').some((r) => same(r.Date, fields.Date));
+  return exists ? store.updateRowById('DayBalances', 'Date', fields.Date, fields) : store.appendRow('DayBalances', fields);
+});
+
 globalThis.requireSession = requireSession;
 globalThis.TABS = TABS;
 globalThis.handle = handle;
