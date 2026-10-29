@@ -8,6 +8,7 @@ import './views/visitors.js';
 import './views/clients.js';
 import './views/filings.js';
 import './views/dashboard.js';
+import './views/reports.js';
 import { esc } from './dom.js';
 
 const root = document.getElementById('app');
