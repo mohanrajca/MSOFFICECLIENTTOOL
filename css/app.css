@@ -72,3 +72,25 @@ code { background: var(--bg); padding: 1px 6px; border-radius: 6px; }
 .vault-gate { max-width: 420px; }
 .pw-plain { margin-right: 8px; user-select: all; }
 @media (max-width: 760px) { .vault-table { display: block; overflow-x: auto; } }
+
+/* visitor note */
+.vis-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.seg { display: flex; gap: 6px; }
+.seg .btn.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.vis-datebar, .vis-cat, .vis-total, .vis-cash { margin-top: 14px; }
+.vis-datebar .field { max-width: 220px; margin: 0; }
+.vis-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0 14px; align-items: start; }
+.vis-cat { border-left: 5px solid var(--c-others); }
+.vis-cat.it { border-left-color: var(--c-it); } .vis-cat.gst { border-left-color: var(--c-gst); } .vis-cat.acc { border-left-color: var(--c-others); }
+.vis-cat h3, .vis-total h3, .vis-cash h3 { margin: 0 0 8px; }
+.vis-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.vis-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+.tile { background: var(--bg); border-radius: var(--radius); padding: 10px 12px; }
+.tile span { display: block; font-size: 12px; color: var(--muted); }
+.tile strong { font-size: 18px; }
+.cash-lines { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; margin: 0 0 12px; }
+.cash-lines dt { color: var(--muted); } .cash-lines dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.cash-lines .strong { font-weight: 700; font-size: 17px; }
+.vis-table { width: 100%; }
+@media (max-width: 760px) { .vis-grid { grid-template-columns: minmax(0, 1fr); } .vis-fields { grid-template-columns: minmax(0, 1fr); } }

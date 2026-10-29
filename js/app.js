@@ -4,6 +4,7 @@ import { currentUser, getSession } from './session.js';
 import { renderSetup, renderLogin, logout } from './auth-ui.js';
 import { ROUTES, startRouter } from './router.js';
 import './views/vault.js';
+import './views/visitors.js';
 import { esc } from './dom.js';
 
 const root = document.getElementById('app');
