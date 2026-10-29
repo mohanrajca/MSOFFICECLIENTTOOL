@@ -55,4 +55,11 @@ describe('sheet-mapping', () => {
     expect(matchClientPassword({ Name: 'Zed' }, 'zed1', m)).toBeNull();
     expect(matchClientPassword({ Name: '' }, '', m)).toBeNull();
   });
+  it('tolerates stray whitespace in header keys', () => {
+    const c = clientRowToCanonical({ 'CLIENT ID ': 'C9', 'GSTIN ': '33AAA', 'CLIENT NAME': 'Y' });
+    expect(c.ClientID).toBe('C9');
+    expect(c.GSTIN).toBe('33AAA');
+    const m = currentPasswordMap([{ 'CLIENT ': 'Y', 'Password ': 'pw' }]);
+    expect(m).toEqual({ y: 'pw' });
+  });
 });

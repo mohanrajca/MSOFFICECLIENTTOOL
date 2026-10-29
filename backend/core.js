@@ -333,3 +333,5 @@ globalThis.handle = handle;
 globalThis.registerAction = registerAction;
 globalThis.ID_PREFIX = ID_PREFIX;
 globalThis.newId = newId;
+globalThis.ACTIONS = ACTIONS;
+globalThis.PUBLIC_ACTIONS = PUBLIC_ACTIONS;

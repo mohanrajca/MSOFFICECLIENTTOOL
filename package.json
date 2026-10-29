@@ -6,7 +6,8 @@
   "description": "MS Associates — Practice Manager (clients, filings, credential vault, visitor note, dashboards, reports)",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:gas": "node scripts/build-gas.js"
   },
   "devDependencies": {
     "vitest": "^5.0.5"

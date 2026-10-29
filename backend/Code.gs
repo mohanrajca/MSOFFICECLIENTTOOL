@@ -12,9 +12,8 @@
  *   Response is JSON text ({"ok":true,"data":...} | {"ok":false,"error":"..."}).
  *   Use fetch(url,{method:'POST',body:JSON.stringify(req)}) and res.json()/JSON.parse(await res.text()).
  *   Do NOT set a Content-Type: application/json header (triggers preflight, which fails).
- *   GET <exec URL>?action=bootstrapStatus is supported for simple reads
- *   (token/session may also be passed as query params; payload as JSON in ?payload=).
- *   Note: GET puts the token in the URL; prefer POST for anything but bootstrapStatus.
+ *   GET <exec URL>?action=bootstrapStatus is the only supported GET (read-only, lock-free).
+ *   Every other action must be a POST (token never goes in a URL).
  */
 
 function hex_(bytes) {
@@ -40,18 +39,17 @@ function respond_(result) {
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
 }
 
-function run_(req) {
+function run_(req, isWrite) {
   try {
     var store = createSheetStore(SpreadsheetApp.getActiveSpreadsheet());
     store.ensureTabs(globalThis.TABS);
     var deps = buildDeps_();
-    // setupAdmin does check-then-append; serialise it under the script lock
-    // (store writes re-enter the same lock).
-    if (req.action === 'setupAdmin') {
-      return runLocked(function () { return globalThis.handle(req, store, deps); });
-    }
+    // Every POST (possible write) runs under the script lock so check-then-append
+    // actions (setupAdmin, upsertUser, natural-key upserts) are atomic. Store writes re-enter the lock.
+    if (isWrite) return runLocked(function () { return globalThis.handle(req, store, deps); });
     return globalThis.handle(req, store, deps);
   } catch (err) {
+    console.error(err && err.stack);
     return { ok: false, error: 'server_error' };
   }
 }
@@ -63,17 +61,15 @@ function doPost(e) {
   } catch (err) {
     return respond_({ ok: false, error: 'bad_request' });
   }
-  if (!req || typeof req !== 'object') return respond_({ ok: false, error: 'bad_request' });
-  return respond_(run_(req));
+  if (!req || typeof req !== 'object' || Array.isArray(req) || typeof req.action !== 'string' || !req.action) {
+    return respond_({ ok: false, error: 'bad_request' });
+  }
+  return respond_(run_(req, true));
 }
 
+// GET is lock-free and therefore restricted to the read-only public action.
 function doGet(e) {
   var p = (e && e.parameter) || {};
-  var payload = {};
-  if (p.payload) {
-    try { payload = JSON.parse(p.payload); } catch (err) {
-      return respond_({ ok: false, error: 'bad_request' });
-    }
-  }
-  return respond_(run_({ action: p.action, token: p.token, session: p.session, payload: payload }));
+  if (p.action !== 'bootstrapStatus') return respond_({ ok: false, error: 'bad_request' });
+  return respond_(run_({ action: 'bootstrapStatus', payload: {} }, false));
 }

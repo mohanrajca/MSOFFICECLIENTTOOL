@@ -14,8 +14,10 @@ export function normalizeName(s) {
 
 // row: object keyed by the CLIENT tab headers. gstUserName is NOT a Clients column;
 // the importer uses it to seed a GST credential.
+const trimKeys = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [String(k).trim(), v]));
+
 export function clientRowToCanonical(row) {
-  const r = row || {};
+  const r = trimKeys(row);
   return {
     ClientID: cell(r['CLIENT ID']),
     Name: cell(r['CLIENT NAME']),
@@ -35,8 +37,9 @@ export function clientRowToCanonical(row) {
 // rows: objects with CLIENT and Password keys (CURRENT tab). Blank names skipped.
 export function currentPasswordMap(rows) {
   const map = {};
-  for (const r of rows || []) {
-    const key = normalizeName(r && r.CLIENT);
+  for (const raw of rows || []) {
+    const r = trimKeys(raw);
+    const key = normalizeName(r.CLIENT);
     if (!key) continue;
     map[key] = r.Password === undefined || r.Password === null ? '' : String(r.Password).trim();
   }

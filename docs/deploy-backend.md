@@ -5,15 +5,26 @@ owns its own tabs (Clients, Filings, Credentials, Users, Visitors, DayBalances, 
 The existing **CLIENT** and **CURRENT** tabs are never written; they are only read later by the importer.
 
 ## 1. Prepare the code files
-`backend/core.js` is an ES module; Apps Script does not accept `export`. Make a copy with the
-keyword stripped (the file already attaches its API to `globalThis`):
+`backend/core.js` is an ES module; Apps Script does not accept `export`. Generate the Apps Script copy:
 
-    sed 's/^export //' backend/core.js > core.gs
+    npm run build:gas          # writes dist/core.gs (strips top-level "export ")
+
+Windows PowerShell equivalent:
+
+    (Get-Content backendcore.js) -replace '^export ','' | Set-Content distcore.gs
+
+Safety check (must print nothing; the build script also fails on these):
+
+    grep -nE "^(export {|export default|import )" backend/core.js
+
+core.js only uses `export function` / `export const` at column 0. It explicitly assigns every symbol the other
+files use (TABS, ID_PREFIX, newId, handle, registerAction, requireSession, ACTIONS, PUBLIC_ACTIONS) to `globalThis`,
+because top-level `const` is not auto-attached to `globalThis` in Apps Script.
 
 ## 2. Add the code to Apps Script
 1. Open the **MS FILE STATUS** spreadsheet, then **Extensions > Apps Script**.
 2. Add these files to the one project (names matter only for readability; all share one global scope):
-   - `core.gs` (generated above)
+   - `core.gs` (paste `dist/core.gs`)
    - `store-sheets.gs` (from `backend/`)
    - `Code.gs` (from `backend/`; replace the default `Code.gs`)
 3. Project Settings > tick **Show "appsscript.json" manifest file**, then replace its contents with `backend/appsscript.json`
@@ -44,11 +55,19 @@ On first load the front end calls `bootstrapStatus`; with no users it shows the 
 The first request also creates any missing app tabs.
 
 ## 7. Manual verification
-    curl -L -X POST "<EXEC_URL>" -H "Content-Type: text/plain" -d '{"action":"bootstrapStatus"}'
+    curl -L -H "Content-Type: text/plain" -d '{"action":"bootstrapStatus"}' "<EXEC_URL>"
 
-Expected: `{"ok":true,"data":{"needsSetup":true}}` (use `-L`; Apps Script redirects the response).
-After the Admin is created it returns `needsSetup:false`. A non-public action with a wrong token returns `{"ok":false,"error":"bad_token"}`.
+(No `-X POST`: `-L` follows Apps Script's 302 and curl switches to GET for the redirect; forcing POST breaks it.)
+Alternative: `curl -L "<EXEC_URL>?action=bootstrapStatus"` (GET is allowed for this one read-only action only).
+
+Expected: `{"ok":true,"data":{"needsSetup":true}}`. After the Admin is created it returns `needsSetup:false`.
+A non-public action with a wrong token returns `{"ok":false,"error":"bad_token"}`.
+
+## Troubleshooting
+- `TABS is not defined` / `createSheetStore is not defined`: core.gs or store-sheets.gs was not added to the project (or the deployment was not updated to a new version).
+- `server_error`: see Executions / Cloud logs; the stack trace is logged via `console.error`.
 
 ## Notes
-- Concurrency: every write holds the script lock; `setupAdmin` holds it across its check-then-append.
+- Concurrency: every POST runs under the script lock, so check-then-append actions (setupAdmin, upsertUser, natural-key upserts) are atomic. GET is lock-free and limited to `bootstrapStatus`.
+- Data types: only Visitors.{VisitorCount,TaxAmt,FeesAmt} and DayBalances.{CashBalance,BankBalance} are numeric; every other column is plain text, so values like `=SUM(..)` are stored literally and ids/GSTINs/ISO datetimes round-trip unchanged.
 - Security: the web app is public; the only gates are `SCRIPT_TOKEN` and user sessions (HMAC-signed with `SESSION_SECRET`). Rotate both if leaked.
