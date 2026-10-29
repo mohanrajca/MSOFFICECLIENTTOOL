@@ -27,7 +27,7 @@ function setup() {
 
 describe('session required', () => {
   const actions = ['listClients', 'upsertClient', 'deleteClient', 'listFilings', 'upsertFiling', 'deleteFiling',
-    'listCredentials', 'upsertCredential', 'deleteCredential', 'listVisitors', 'upsertVisitor', 'getDayBalance', 'setDayBalance'];
+    'listCredentials', 'upsertCredential', 'deleteCredential', 'listVisitors', 'upsertVisitor', 'getDayBalance', 'setDayBalance', 'listBalances'];
   test.each(actions)('%s without session -> forbidden', (a) => {
     const { store } = setup();
     expect(call(store, a, {})).toEqual({ ok: false, error: 'forbidden' });
@@ -141,6 +141,13 @@ describe('day balances', () => {
     call(store, 'setDayBalance', { Date: '2026-10-30', CashBalance: 1 }, staff);
     expect(store.readTable('DayBalances')).toHaveLength(2);
     expect(call(store, 'getDayBalance', { date: '2026-10-29' }, staff).data.CashBalance).toBe(150);
+  });
+  test('listBalances returns all sorted; before filters strictly', () => {
+    const { store, staff } = setup();
+    expect(call(store, 'listBalances', {}, staff)).toEqual({ ok: true, data: [] });
+    for (const d of ['2026-10-30', '2026-01-05', '2026-10-01']) call(store, 'setDayBalance', { Date: d, CashBalance: 1 }, staff);
+    expect(call(store, 'listBalances', {}, staff).data.map((r) => r.Date)).toEqual(['2026-01-05', '2026-10-01', '2026-10-30']);
+    expect(call(store, 'listBalances', { before: '2026-10-30' }, staff).data.map((r) => r.Date)).toEqual(['2026-01-05', '2026-10-01']);
   });
   test('missing Date -> invalid_input', () => {
     const { store, staff } = setup();

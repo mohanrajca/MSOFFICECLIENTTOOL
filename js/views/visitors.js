@@ -6,7 +6,6 @@ import { esc } from '../dom.js';
 import { CATEGORIES, num, computeDayBalance, prevCloseFor, grandTotals } from '../balances.js';
 
 const CAT_CLASS = { 'Income Tax': 'it', GST: 'gst', Accounts: 'acc' };
-const LOOKBACK_CHUNK = 7, LOOKBACK_CHUNKS = 5; // up to 35 days back to find the last recorded balance
 
 export const inr = (n) => '₹' + num(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const int = (n) => Math.round(num(n)).toLocaleString('en-IN');
@@ -21,17 +20,7 @@ function addDays(iso, n) {
 }
 const dayOf = (v) => String(v == null ? '' : v).slice(0, 10);
 
-// Balances recorded on or before fromISO (backend only has getDayBalance per date, so we
-// look back in week-sized parallel chunks until something is found).
-async function recentBalances(fromISO) {
-  const found = [];
-  for (let c = 0; c < LOOKBACK_CHUNKS && !found.length; c++) {
-    const dates = Array.from({ length: LOOKBACK_CHUNK }, (_, i) => addDays(fromISO, -(c * LOOKBACK_CHUNK + i)));
-    const rows = await Promise.all(dates.map((date) => apiCall('getDayBalance', { date })));
-    rows.forEach((r) => { if (r) found.push(r); });
-  }
-  return found;
-}
+const loadBalances = (before) => apiCall('listBalances', before ? { before } : {});
 
 export function renderVisitors(container) {
   const st = { tab: 'day', date: todayISO(), month: todayISO().slice(0, 7) };
@@ -58,13 +47,13 @@ async function renderDay(body, st) {
   let rows, existing, prior;
   try {
     [rows, existing, prior] = await Promise.all([
-      apiCall('listVisitors', { date }), apiCall('getDayBalance', { date }), recentBalances(addDays(date, -1))]);
+      apiCall('listVisitors', { date }), apiCall('getDayBalance', { date }), loadBalances(date)]);
   } catch (e) { body.innerHTML = errBox(e); return; }
   if (st.date !== date || st.tab !== 'day') return; // user moved on while loading
   rows = (rows || []).filter((r) => dayOf(r.Date) === date);
   const ids = {}; const byCat = {};
   rows.forEach((r) => { ids[r.Category] = r.VisitorID; byCat[r.Category] = r; });
-  const prevClose = prevCloseFor(date, prior);
+  const prevClose = prevCloseFor(date, prior || []);
   const val = (c, k) => (byCat[c] && byCat[c][k] !== '' && byCat[c][k] != null ? num(byCat[c][k]) : '');
 
   const catCard = (c) => `<div class="card vis-cat ${CAT_CLASS[c]}" data-cat="${esc(c)}">
@@ -95,7 +84,7 @@ async function renderDay(body, st) {
   const $ = (s) => body.querySelector(s);
   const catVals = (c) => {
     const el = body.querySelector(`[data-cat="${c}"]`);
-    return { VisitorCount: num(el.querySelector('[name=count]').value), TaxAmt: num(el.querySelector('[name=tax]').value), FeesAmt: num(el.querySelector('[name=fees]').value) };
+    return { VisitorCount: Math.max(0, Math.round(num(el.querySelector('[name=count]').value))), TaxAmt: num(el.querySelector('[name=tax]').value), FeesAmt: num(el.querySelector('[name=fees]').value) };
   };
   const liveRows = () => CATEGORIES.map((c) => ({ Category: c, ...catVals(c) }));
   const calc = () => {
@@ -116,6 +105,7 @@ async function renderDay(body, st) {
     if (existing.BankBalance !== '' && existing.BankBalance != null) $('[name=bank]').value = num(existing.BankBalance);
     $('[name=note]').value = existing.Note || '';
   }
+  let storedCash = existing ? num(existing.CashBalance) : null;
   body.querySelectorAll('input[type=number]').forEach((i) => i.addEventListener('input', refresh));
   refresh();
 
@@ -129,7 +119,11 @@ async function renderDay(body, st) {
       if (ids[c]) payload.VisitorID = ids[c];
       const saved = await apiCall('upsertVisitor', payload);
       if (saved && saved.VisitorID) ids[c] = saved.VisitorID;
+      const cEl = body.querySelector(`[data-cat="${c}"]`);
+      cEl.querySelector('[name=count]').value = payload.VisitorCount;
+      refresh();
       msg.textContent = 'Saved';
+      if (storedCash !== null && calc().closing !== storedCash) $('#bal-msg').textContent = 'Totals changed: Save balances to update';
     } catch (e) { msg.textContent = apiError(e); }
     btn.disabled = false;
   }));
@@ -138,7 +132,9 @@ async function renderDay(body, st) {
     const btn = $('#save-bal'); const msg = $('#bal-msg');
     btn.disabled = true; msg.textContent = 'Saving…';
     try {
-      await apiCall('setDayBalance', { Date: date, CashBalance: calc().closing, BankBalance: num($('[name=bank]').value), Note: $('[name=note]').value.trim() });
+      const closing = calc().closing;
+      await apiCall('setDayBalance', { Date: date, CashBalance: closing, BankBalance: $('[name=bank]').value.trim() === '' ? '' : num($('[name=bank]').value), Note: $('[name=note]').value.trim() });
+      storedCash = closing;
       msg.textContent = 'Saved';
     } catch (e) { msg.textContent = apiError(e); }
     btn.disabled = false;
@@ -149,16 +145,15 @@ async function renderMonth(body, st) {
   body.innerHTML = '<div class="card"><p class="muted">Loading…</p></div>';
   const month = st.month;
   let rows, bals;
+  const [y, m] = month.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
   try {
-    const [y, m] = month.split('-').map(Number);
-    const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
-    const upTo = last > todayISO() ? todayISO() : last;
-    [rows, bals] = await Promise.all([apiCall('listVisitors', { month }), recentBalances(upTo)]);
+    [rows, bals] = await Promise.all([apiCall('listVisitors', { month }), loadBalances()]);
   } catch (e) { body.innerHTML = errBox(e); return; }
   if (st.month !== month || st.tab !== 'month') return;
   rows = (rows || []).filter((r) => dayOf(r.Date).startsWith(month));
   const days = [...new Set(rows.map((r) => dayOf(r.Date)))].sort();
-  const latest = bals.slice().sort((a, b) => dayOf(b.Date).localeCompare(dayOf(a.Date)))[0];
+  const latest = (bals || []).filter((r) => dayOf(r.Date) <= last).sort((a, b) => dayOf(b.Date).localeCompare(dayOf(a.Date)))[0];
   const tr = days.map((d) => {
     const g = grandTotals(rows.filter((r) => dayOf(r.Date) === d));
     return `<tr data-day="${esc(d)}"><td>${esc(d)}</td><td>${int(g.count)}</td><td>${inr(g.tax)}</td><td>${inr(g.fees)}</td></tr>`;
@@ -170,7 +165,7 @@ async function renderMonth(body, st) {
       <div class="tile"><span>Tax</span><strong id="m-tax">${inr(mt.tax)}</strong></div>
       <div class="tile"><span>Fees</span><strong id="m-fees">${inr(mt.fees)}</strong></div>
       <div class="tile"><span>Cash balance</span><strong id="m-cash">${latest ? inr(latest.CashBalance) : '—'}</strong></div>
-      <div class="tile"><span>Bank balance</span><strong id="m-bank">${latest ? inr(latest.BankBalance) : '—'}</strong></div></div>
+      <div class="tile"><span>Bank balance</span><strong id="m-bank">${latest && latest.BankBalance !== '' && latest.BankBalance != null ? inr(latest.BankBalance) : '—'}</strong></div></div>
       ${latest ? `<p class="muted">Latest recorded balances: ${esc(dayOf(latest.Date))}</p>` : '<p class="muted">No balances recorded yet.</p>'}</div>
     <div class="card vis-total"><table class="vault-table vis-table"><thead><tr><th>Date</th><th>Visitors</th><th>Tax</th><th>Fees</th></tr></thead>
       <tbody>${tr || '<tr><td colspan="4" class="muted">No visitor entries for this month.</td></tr>'}</tbody>

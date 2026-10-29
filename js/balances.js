@@ -8,7 +8,12 @@ export function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-const isNum = (v) => v !== '' && v != null && Number.isFinite(typeof v === 'number' ? v : Number(String(v).replace(/,/g, '').trim()));
+const isNum = (v) => {
+  if (v == null) return false;
+  if (typeof v === 'number') return Number.isFinite(v);
+  const t = String(v).replace(/,/g, '').trim();
+  return t !== '' && Number.isFinite(Number(t));
+};
 const day = (d) => String(d == null ? '' : d).slice(0, 10);
 
 export function computeDayBalance({ prevClose, cashReceipts, cashOutflows, override } = {}) {

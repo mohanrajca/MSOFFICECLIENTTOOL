@@ -15,6 +15,7 @@ describe('computeDayBalance', () => {
     }
     expect(computeDayBalance({ prevClose: '100', cashReceipts: '50' }).closing).toBe(150);
     expect(computeDayBalance({ prevClose: 10, override: NaN }).closing).toBe(10);
+    expect(computeDayBalance({ prevClose: 10, cashReceipts: 5, override: '   ' }).closing).toBe(15);
   });
   it('carries forward across several days', () => {
     let prev = 0; const closes = [];

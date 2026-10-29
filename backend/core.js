@@ -346,6 +346,15 @@ registerAction('getDayBalance', (req, store, deps) => {
   return store.readTable('DayBalances').find((r) => same(r.Date, date)) || null;
 });
 
+registerAction('listBalances', (req, store, deps) => {
+  if (!anySession(req, store, deps)) return FORBIDDEN;
+  const { before } = payloadOf(req);
+  const key = (r) => str(r.Date).slice(0, 10);
+  const b = str(before).slice(0, 10);
+  return store.readTable('DayBalances').filter((r) => key(r) && (!b || key(r) < b))
+    .sort((x, y) => (key(x) < key(y) ? -1 : key(x) > key(y) ? 1 : 0));
+});
+
 registerAction('setDayBalance', (req, store, deps) => {
   if (!anySession(req, store, deps)) return FORBIDDEN;
   const p = payloadOf(req);

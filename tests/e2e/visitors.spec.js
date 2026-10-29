@@ -18,6 +18,7 @@ const STUB = `
         if (i >= 0) { window.__visitors[i] = { ...window.__visitors[i], ...p }; return ok(window.__visitors[i]); }
         const row = { ...p, VisitorID: 'V' + (window.__visitors.length + 1) }; window.__visitors.push(row); return ok(row);
       }
+      case 'listBalances': return ok(window.__balances.filter((r) => !p.before || r.Date < p.before).sort((a, b) => a.Date.localeCompare(b.Date)));
       case 'getDayBalance': return ok(window.__balances.find((r) => r.Date === p.date) || null);
       case 'setDayBalance': {
         const i = window.__balances.findIndex((r) => r.Date === p.Date);
@@ -114,4 +115,26 @@ test('month summary lists days, totals and latest balances', async ({ page }) =>
   await expect(page.locator('#m-cash')).toHaveText('₹12,345');
   await expect(page.locator('#m-bank')).toHaveText('₹99,000');
   await expect(page.locator('body')).not.toContainText('NaN');
+});
+
+test('old prior balance (beyond 35 days) still carries forward; integer counts; stale-cash hint; blank bank shows dash', async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => window.__balances.push({ Date: '2026-03-01', CashBalance: 7777, BankBalance: '', Note: '' }));
+  await setDate(page, '2026-10-01');
+  await expect(page.locator('#c-open')).toHaveText('₹7,777');
+  await fillCat(page, 'GST', 2.6, 0, 100);
+  await page.getByRole('button', { name: 'Save GST' }).click();
+  await expect(page.locator('[data-cat="GST"] [data-msg]')).toHaveText('Saved');
+  expect((await calls(page, 'upsertVisitor'))[0].VisitorCount).toBe(3);
+  await fillCat(page, 'Income Tax', -4, 0, 0);
+  await page.getByRole('button', { name: 'Save Income Tax' }).click();
+  await expect(page.locator('[data-cat="Income Tax"] [data-msg]')).toHaveText('Saved');
+  expect((await calls(page, 'upsertVisitor'))[1].VisitorCount).toBe(0);
+  await page.getByRole('button', { name: 'Save balances' }).click();
+  await expect(page.locator('#bal-msg')).toHaveText('Saved');
+  await fillCat(page, 'GST', 2, 0, 500);
+  await page.getByRole('button', { name: 'Save GST' }).click();
+  await expect(page.locator('#bal-msg')).toContainText('Save balances to update');
+  await page.getByRole('button', { name: 'Month' }).click();
+  await expect(page.locator('#m-bank')).toHaveText('—');
 });
