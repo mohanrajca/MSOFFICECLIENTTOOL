@@ -3,6 +3,7 @@
 The backend stores data in the firm's Google Spreadsheet (MS FILE STATUS). The app creates and
 owns its own tabs (Clients, Filings, Credentials, Users, Visitors, DayBalances, Masters).
 The existing **CLIENT** and **CURRENT** tabs are never written; they are only read later by the importer.
+**After the import is verified, DELETE the plaintext passwords from the `CURRENT` tab**: the app never clears it, so anyone with Sheet or Admin access can otherwise still read them.
 
 ## 1. Prepare the code files
 `backend/core.js` is an ES module; Apps Script does not accept `export`. Generate the Apps Script copy:

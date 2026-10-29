@@ -73,7 +73,12 @@ if they only need the app, and never paste the token or master key into the Shee
 The firm's existing **CLIENT** tab (clients) and **CURRENT** tab (plaintext GST passwords) are import sources and
 are never written. As an Admin, unlock the vault and use **Import from existing sheet**. Clients are imported, GST
 passwords are encrypted with your master key and saved, and any CURRENT row that cannot be matched to a client is
-listed for manual mapping (never silently dropped). Once verified, delete the plaintext passwords from the CURRENT tab.
+listed for manual mapping (never silently dropped).
+
+**Post-migration step 1 (required): after the one-time import has run and you have verified the encrypted vault,
+DELETE the plaintext passwords from the Google Sheet's `CURRENT` tab.** The app never writes to or clears that tab,
+so until you do this, anyone with Sheet or Admin access can still read those plaintext GST passwords. Keep the
+Sheet-lockdown guidance above in force as well.
 
 ## Known limitations
 
@@ -81,7 +86,6 @@ listed for manual mapping (never silently dropped). Once verified, delete the pl
   render. The WhatsApp message and Excel exports are unaffected.
 - **GST filing-status import is still pending**: it needs the exact name of the firm's per-period GSTR-1 / GSTR-3B
   status tab. Until it is supplied, existing GST filing history is not imported; log filings in the app.
-- **Users and Profile** screens are placeholders in this build.
 
 ## Development
 
