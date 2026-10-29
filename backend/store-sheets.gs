@@ -20,6 +20,10 @@ var NUMERIC_COLUMNS = {
   DayBalances: { CashBalance: true, BankBalance: true },
 };
 
+// Bump whenever TABS (backend/core.js) changes. ensureTabs only does the full tab/header
+// reconciliation when the Script Property 'schemaVerified' differs from this value.
+var SCHEMA_VERSION = '2026-10-29.1';
+
 var lockDepth_ = 0;
 /** Run fn holding the script lock; re-entrant within one execution. */
 function runLocked(fn) {
@@ -111,17 +115,22 @@ function createSheetStore(spreadsheet) {
 
   return {
     ensureTabs: function (schema) {
+      // Fast path: one property read. Full reconciliation runs once per SCHEMA_VERSION.
+      var props = PropertiesService.getScriptProperties();
+      if (props.getProperty('schemaVerified') === SCHEMA_VERSION) return;
       // Reads only (no lock): find tabs to create and existing tabs missing schema columns.
       var names = Object.keys(schema);
+      var norm = function (h) { return String(h).trim().toLowerCase(); };
+      var hasCol = function (have, c) { return have.some(function (h) { return norm(h) === norm(c); }); };
       var missing = names.filter(function (n) { return !ss.getSheetByName(n); });
       var drift = [];
       names.forEach(function (n) {
         var sh = ss.getSheetByName(n);
         if (!sh) return;
         var have = headers_(sh);
-        if (schema[n].some(function (c) { return have.indexOf(c) < 0; })) drift.push(n);
+        if (schema[n].some(function (c) { return !hasCol(have, c); })) drift.push(n);
       });
-      if (!missing.length && !drift.length) return; // lock-free fast path
+      if (!missing.length && !drift.length) { props.setProperty('schemaVerified', SCHEMA_VERSION); return; }
       runLocked(function () {
         missing.forEach(function (name) {
           if (ss.getSheetByName(name)) return; // created meanwhile
@@ -136,7 +145,7 @@ function createSheetStore(spreadsheet) {
           var sh = ss.getSheetByName(name);
           if (!sh) return;
           var have = headers_(sh); // re-read under the lock
-          var add = schema[name].filter(function (c) { return have.indexOf(c) < 0; });
+          var add = schema[name].filter(function (c) { return !hasCol(have, c); });
           if (!add.length) return;
           var start = have.length + 1;
           if (sh.getMaxColumns() < have.length + add.length) sh.insertColumnsAfter(sh.getMaxColumns(), have.length + add.length - sh.getMaxColumns());
@@ -145,6 +154,7 @@ function createSheetStore(spreadsheet) {
           });
           sh.getRange(1, start, 1, add.length).setNumberFormat('@').setValues([add]).setFontWeight('bold');
         });
+        props.setProperty('schemaVerified', SCHEMA_VERSION);
       });
     },
 

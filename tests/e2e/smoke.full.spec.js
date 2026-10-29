@@ -6,7 +6,7 @@ const CONFIGURED = "export const CONFIG = { ENDPOINT_URL: 'https://stub.test/exe
 
 const FAKES = `
   window.__charts = [];
-  window.Chart = class { constructor(el, cfg) { this.cfg = cfg; window.__charts.push(this); } destroy() {} };
+  window.Chart = class { constructor(el, cfg) { this.cfg = cfg; window.__charts.push({ id: el.id, cfg }); } destroy() {} };
   window.__xlsx = []; window.__pdf = []; window.__open = [];
   window.XLSX = { utils: { json_to_sheet: (rows) => ({ rows }), book_new: () => ({ sheets: [] }), book_append_sheet: (wb, ws, name) => wb.sheets.push({ ws, name }) },
     writeFile: (wb, name) => window.__xlsx.push({ name, sheets: wb.sheets }) };
@@ -186,7 +186,7 @@ test('full flow: setup, login, client, filing, vault, visitors, dashboard, expor
   await expect(page.locator('#bd-IT')).toHaveText('1');
   await expect(page.locator('#due-list')).toContainText('ITR-3');
   await expect(page.locator('#client-table')).toContainText('Dhoni Traders');
-  const donut = await page.evaluate(() => window.__charts[window.__charts.length - 2].cfg.data.datasets[0].data); // latest render: [donut, bars]
+  const donut = await page.evaluate(() => (window.__charts.filter((c) => c.id === 'ch-donut').pop()).cfg.data.datasets[0].data);
   expect(donut).toEqual([1, 1, 0, 0]);
   await noJunk(page);
 
@@ -238,9 +238,10 @@ test('mobile: 16px gutters, no horizontal scroll on any page, GST Suite Pro reac
   await menu.click();
   await expect(menu).toHaveAttribute('aria-expanded', 'false');
 
+  const READY = { dashboard: '#kpi-clients', clients: '#cl-list table', filings: '#fl-list table', vault: '.vault-gate', visitors: '#vis-date', reports: '#rp-pick' };
   for (const route of ['dashboard', 'clients', 'filings', 'vault', 'visitors', 'reports']) {
     await page.evaluate((r) => { location.hash = '#/' + r; }, route);
-    await page.waitForTimeout(250);
+    await expect(page.locator(READY[route])).toBeVisible();
     const m = await page.evaluate(() => ({
       over: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       left: document.querySelector('#view').getBoundingClientRect().left,
