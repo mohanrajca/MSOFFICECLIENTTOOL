@@ -30,6 +30,48 @@ export function newId(prefix, rng = Math.random) {
   return prefix ? `${prefix}_${body}` : body;
 }
 
+// ---- API dispatch -------------------------------------------------------
+// Action registry: name -> (req, store, deps) => data. Later tasks add entries
+// via registerAction(). Handlers return data (wrapped as {ok:true,data}) or
+// throw nothing; auth/CRUD tasks may return {ok:false,error} directly.
+export const ACTIONS = {};
+// Actions reachable without a valid obscurity token.
+export const PUBLIC_ACTIONS = new Set(['bootstrapStatus']);
+
+export function registerAction(name, fn, { public: isPublic = false } = {}) {
+  ACTIONS[name] = fn;
+  if (isPublic) PUBLIC_ACTIONS.add(name);
+}
+
+export function handle(req, store, deps) {
+  const { action } = req || {};
+  const fn = Object.prototype.hasOwnProperty.call(ACTIONS, action) ? ACTIONS[action] : null;
+  if (!PUBLIC_ACTIONS.has(action) && (req || {}).token !== deps.expectedToken) {
+    return { ok: false, error: 'bad_token' };
+  }
+  if (!fn) return { ok: false, error: 'unknown_action' };
+  const out = fn(req, store, deps);
+  return out && typeof out.ok === 'boolean' ? out : { ok: true, data: out };
+}
+
+registerAction('bootstrapStatus', (req, store) => ({
+  needsSetup: store.readTable('Users').length === 0,
+}));
+
+registerAction('getMasters', (req, store) => {
+  const portals = [];
+  const returnTypes = {};
+  for (const r of store.readTable('Masters')) {
+    if (r.Key === 'portal') portals.push(r.Value);
+    else if (typeof r.Key === 'string' && r.Key.startsWith('return:')) {
+      (returnTypes[r.Key.slice(7)] ||= []).push(r.Value);
+    }
+  }
+  return { portals, returnTypes };
+});
+
 globalThis.TABS = TABS;
+globalThis.handle = handle;
+globalThis.registerAction = registerAction;
 globalThis.ID_PREFIX = ID_PREFIX;
 globalThis.newId = newId;
