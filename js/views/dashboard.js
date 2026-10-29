@@ -2,20 +2,14 @@
 // due this week, and today's visitor totals + latest cash/bank. Aggregation lives in ../aggregate.js.
 import { apiCall, apiError } from '../api.js';
 import { registerView } from '../router.js';
-import { esc } from '../dom.js';
+import { esc, todayISO, day } from '../dom.js';
 import { num, grandTotals } from '../balances.js';
 import { filingBreakdown, monthlyFilingSeries, dueThisWeek, clientFilingSummary } from '../aggregate.js';
 
 const COLORS = { IT: '#4f46e5', GST: '#059669', MCA: '#d97706', Others: '#0891b2' };
 const inr = (n) => '₹' + num(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const int = (n) => Math.round(num(n)).toLocaleString('en-IN');
-const day = (x) => String(x == null ? '' : x).slice(0, 10);
 const dash = (x) => (day(x) === '' ? '—' : esc(day(x)));
-
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 let charts = [];
 let gen = 0;
@@ -60,7 +54,7 @@ export async function renderDashboard(container) {
   }).join('');
 
   const tile = (cls, label, value, sub, id) => `<div class="kpi ${cls}"><span>${label}</span><strong id="${id}">${value}</strong><small class="muted">${sub}</small></div>`;
-  container.innerHTML = `<h2 class="dash-title">Dashboard</h2><div class="dash-grid"><div class="dash-main">
+  container.innerHTML = `<h2 class="dash-title">Dashboard</h2><p class="muted dash-sub">The breakdown donut counts all logged filings (filed and pending); the monthly bars count only filings filed in each month.</p><div class="dash-grid"><div class="dash-main">
       <div class="kpis">
         ${tile('k-it', 'Total clients', int(clients.length), 'on the master list', 'kpi-clients')}
         ${tile('k-gst', 'Filings this month', int(filedThisMonth), esc(month), 'kpi-filed')}

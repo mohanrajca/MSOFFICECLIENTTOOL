@@ -18,6 +18,7 @@ export function renderReports(container) {
       <p class="muted">Send clients their filing status and export registers to Excel.</p></div></div>
     <div class="card" id="rp-client"><h3>Client filing status</h3>
       <label class="field"><span>Client</span><select id="rp-pick"><option value="">Select a client…</option></select></label>
+      <p class="muted" id="rp-load">Loading clients…</p>
       <pre id="rp-preview" class="muted" style="white-space:pre-wrap"></pre>
       <div class="vis-actions"><button type="button" class="btn primary" id="rp-wa" disabled>WhatsApp</button>
         <button type="button" class="btn" id="rp-pdf" disabled>PDF</button>
@@ -65,6 +66,7 @@ export function renderReports(container) {
   }));
   $('#rp-x-visitors').addEventListener('click', guard(async () => {
     const month = $('#rp-vmonth').value;
+    if (!month) throw new Error('Choose a month to export the visitor register.');
     const rows = await apiCall('listVisitors', { month });
     toExcel(visitorsToExcelRows(Array.isArray(rows) ? rows : []), 'Visitors', `visitors-${month}.xlsx`);
   }));
@@ -76,7 +78,9 @@ export function renderReports(container) {
       const opts = st.clients.map((c) => `<option value="${esc(c.ClientID)}">${esc(c.Name)}</option>`).join('');
       $('#rp-pick').insertAdjacentHTML('beforeend', opts);
       $('#rp-fclient').insertAdjacentHTML('beforeend', opts);
-    } catch (e) { showErr(e); }
+      $('#rp-load').hidden = st.clients.length > 0;
+      if (!st.clients.length) $('#rp-load').textContent = 'No clients yet. Add clients first to send status updates.';
+    } catch (e) { $('#rp-load').hidden = true; showErr(e); }
   })();
 }
 

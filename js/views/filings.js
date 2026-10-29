@@ -1,7 +1,7 @@
 // Filings: log / list / edit / delete. Portal + return types come from Masters, with a built-in fallback.
 import { apiCall, apiError } from '../api.js';
 import { registerView } from '../router.js';
-import { esc } from '../dom.js';
+import { esc, day } from '../dom.js';
 
 export const DEFAULT_MASTERS = {
   portals: ['Income Tax', 'GST', 'MCA', 'TRACES', 'PF/ESI', 'Professional Tax', 'Other'],
@@ -19,7 +19,6 @@ export function resolveMasters(m) {
 }
 
 const v = (x) => (x === undefined || x === null ? '' : String(x));
-const day = (x) => v(x).slice(0, 10);
 
 export function renderFilings(container) {
   const st = { clients: [], filings: [], masters: DEFAULT_MASTERS, filter: '', editing: null };
@@ -53,17 +52,21 @@ export function renderFilings(container) {
     if (!f) { $('#fl-form').innerHTML = ''; return; }
     const m = st.masters;
     const portal = v(f.Portal) || m.portals[0];
+    // Keep an existing value that is no longer in the current options, so editing never silently changes it.
+    const withCurrent = (list, cur) => (cur && !list.includes(cur) ? [...list, cur] : list);
+    const portals = withCurrent(m.portals, portal);
+    const statuses = withCurrent(['Pending', 'Filed'], v(f.Status));
     const rtOpts = (p) => (m.returnTypes[p] || []).map((r) => `<option value="${esc(r)}"></option>`).join('');
     $('#fl-form').innerHTML = `<form class="card form-card" id="fl-f" novalidate><h3>${f.FilingID ? 'Edit filing' : 'Log filing'}</h3>
       <div class="form-grid">
         <label class="field"><span>Client</span><select name="ClientID"><option value="">Select client…</option>${st.clients.map((c) => `<option value="${esc(c.ClientID)}"${String(c.ClientID) === v(f.ClientID) ? ' selected' : ''}>${esc(c.Name)}</option>`).join('')}</select></label>
-        <label class="field"><span>Portal</span><select name="Portal">${m.portals.map((p) => `<option${p === portal ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
+        <label class="field"><span>Portal</span><select name="Portal">${portals.map((p) => `<option${p === portal ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
         <label class="field"><span>Return type</span><input name="ReturnType" list="fl-rt" value="${esc(f.ReturnType)}" autocomplete="off"><datalist id="fl-rt">${rtOpts(portal)}</datalist></label>
         <label class="field"><span>Period</span><input name="Period" type="text" placeholder="e.g. 2026-09 or FY 2025-26" value="${esc(f.Period)}"></label>
         <label class="field"><span>Due date</span><input name="DueDate" type="date" value="${esc(day(f.DueDate))}"></label>
         <label class="field"><span>Filed date</span><input name="FiledDate" type="date" value="${esc(day(f.FiledDate))}"></label>
         <label class="field"><span>Ack no.</span><input name="AckNo" type="text" value="${esc(f.AckNo)}"></label>
-        <label class="field"><span>Status</span><select name="Status">${['Pending', 'Filed'].map((s) => `<option${s === (v(f.Status) || 'Pending') ? ' selected' : ''}>${s}</option>`).join('')}</select></label></div>
+        <label class="field"><span>Status</span><select name="Status">${statuses.map((s) => `<option${s === (v(f.Status) || 'Pending') ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label></div>
       <div class="form-error" id="fl-err" role="alert" hidden></div>
       <div class="vis-actions"><button type="submit" class="btn primary">Save filing</button><button type="button" class="btn" id="fl-cancel">Cancel</button></div></form>`;
     const form = $('#fl-f');
@@ -76,7 +79,7 @@ export function renderFilings(container) {
       ['ClientID', 'Portal', 'ReturnType', 'Period', 'DueDate', 'FiledDate', 'AckNo', 'Status'].forEach((k) => { p[k] = el[k].value.trim(); });
       if (!p.ClientID) { err.textContent = 'Select a client'; err.hidden = false; return; }
       if (!p.ReturnType) { err.textContent = 'Return type is required'; err.hidden = false; return; }
-      if (p.Status !== 'Filed') { p.FiledDate = ''; p.AckNo = ''; }
+      if (p.Status === 'Pending') { p.FiledDate = ''; p.AckNo = ''; }
       if (f.FilingID) p.FilingID = f.FilingID;
       try { await apiCall('upsertFiling', p); st.editing = null; drawForm(); await load(); } catch (e) { err.textContent = apiError(e); err.hidden = false; }
     });

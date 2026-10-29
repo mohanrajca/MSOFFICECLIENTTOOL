@@ -1,6 +1,6 @@
 // Pure filing aggregation (no DOM, Node-testable). Dates are ISO strings (YYYY-MM-DD).
+import { todayISO, day } from './dom.js';
 const s = (v) => (v === undefined || v === null ? '' : String(v));
-const day = (v) => s(v).slice(0, 10);
 const isFiled = (f) => s(f && f.Status).trim().toLowerCase() === 'filed';
 
 export function portalBucket(portal) {
@@ -15,11 +15,6 @@ export function filingBreakdown(filings) {
   const out = { IT: 0, GST: 0, MCA: 0, Others: 0 };
   for (const f of filings || []) out[portalBucket(f.Portal)] += 1;
   return out;
-}
-
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // Last `months` months ending at the month of `today` (default: now), oldest first.

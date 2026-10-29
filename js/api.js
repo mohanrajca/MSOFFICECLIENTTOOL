@@ -8,11 +8,20 @@ export const ERROR_MESSAGES = {
   forbidden: 'You do not have permission to do that.',
   already_setup: 'Setup has already been completed. Please sign in.',
   last_admin: 'At least one active Admin must remain.',
+  bad_response: 'The server sent an unexpected response. Please check the backend URL and try again.',
+  unknown_error: 'Something went wrong. Please try again.',
+  server_error: 'The server hit an error. Please try again in a moment.',
+  network: 'Cannot reach the server. Check your internet connection and the backend URL.',
 };
+
+const NETWORK_RE = /failed to fetch|networkerror|load failed|network request failed/i;
 
 export function apiError(err) {
   const code = err && (err.code || err.message);
-  return ERROR_MESSAGES[code] || (err && err.message) || 'Something went wrong. Please try again.';
+  if (ERROR_MESSAGES[code]) return ERROR_MESSAGES[code];
+  const msg = err && err.message;
+  if (msg && NETWORK_RE.test(msg)) return ERROR_MESSAGES.network;
+  return msg || 'Something went wrong. Please try again.';
 }
 
 export async function apiCall(action, payload) {

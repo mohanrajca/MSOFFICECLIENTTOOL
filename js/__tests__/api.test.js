@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../config.js', () => ({ CONFIG: { ENDPOINT_URL: 'https://example.test/exec', TOKEN: 'tok123' } }));
 
-import { apiCall } from '../api.js';
+import { apiCall, apiError } from '../api.js';
 import { setSession, clearSession } from '../session.js';
 
 function mockFetch(body) {
@@ -43,4 +43,12 @@ describe('apiCall', () => {
     await expect(apiCall('login', {})).rejects.toThrow('bad_login');
     try { await apiCall('login', {}); } catch (e) { expect(e.code).toBe('bad_login'); }
   });
+});
+
+it('apiError maps bad_response, unknown_error and network failures to friendly text', () => {
+  expect(apiError(Object.assign(new Error('bad_response'), { code: 'bad_response' }))).toMatch(/unexpected response/i);
+  expect(apiError(Object.assign(new Error('unknown_error'), { code: 'unknown_error' }))).not.toContain('unknown_error');
+  expect(apiError(new TypeError('Failed to fetch'))).toMatch(/cannot reach the server/i);
+  expect(apiError(new Error('Load failed'))).toMatch(/cannot reach the server/i);
+  expect(apiError(new Error('Custom message'))).toBe('Custom message');
 });

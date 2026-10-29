@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "MS Associates — Practice Manager (clients, filings, credential vault, visitor note, dashboards, reports)",
+  "description": "MS Associates \u2014 Practice Manager (clients, filings, credential vault, visitor note, dashboards, reports)",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
@@ -13,8 +13,5 @@
   "devDependencies": {
     "@playwright/test": "^1.64.1",
     "vitest": "^5.0.5"
-  },
-  "dependencies": {
-    "crypto-js": "^4.2.0"
   }
 }

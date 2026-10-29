@@ -111,8 +111,17 @@ function createSheetStore(spreadsheet) {
 
   return {
     ensureTabs: function (schema) {
-      var missing = Object.keys(schema).filter(function (n) { return !ss.getSheetByName(n); });
-      if (!missing.length) return; // lock-free fast path
+      // Reads only (no lock): find tabs to create and existing tabs missing schema columns.
+      var names = Object.keys(schema);
+      var missing = names.filter(function (n) { return !ss.getSheetByName(n); });
+      var drift = [];
+      names.forEach(function (n) {
+        var sh = ss.getSheetByName(n);
+        if (!sh) return;
+        var have = headers_(sh);
+        if (schema[n].some(function (c) { return have.indexOf(c) < 0; })) drift.push(n);
+      });
+      if (!missing.length && !drift.length) return; // lock-free fast path
       runLocked(function () {
         missing.forEach(function (name) {
           if (ss.getSheetByName(name)) return; // created meanwhile
@@ -121,6 +130,20 @@ function createSheetStore(spreadsheet) {
           formatColumns_(sh, name, cols);
           sh.getRange(1, 1, 1, cols.length).setNumberFormat('@').setValues([cols]).setFontWeight('bold');
           sh.setFrozenRows(1);
+        });
+        // Header reconciliation: append any schema columns an existing tab lacks (never reorder/remove).
+        drift.forEach(function (name) {
+          var sh = ss.getSheetByName(name);
+          if (!sh) return;
+          var have = headers_(sh); // re-read under the lock
+          var add = schema[name].filter(function (c) { return have.indexOf(c) < 0; });
+          if (!add.length) return;
+          var start = have.length + 1;
+          if (sh.getMaxColumns() < have.length + add.length) sh.insertColumnsAfter(sh.getMaxColumns(), have.length + add.length - sh.getMaxColumns());
+          add.forEach(function (c, i) {
+            sh.getRange(1, start + i, sh.getMaxRows(), 1).setNumberFormat(isNumericCol_(name, c) ? '0.######' : '@');
+          });
+          sh.getRange(1, start, 1, add.length).setNumberFormat('@').setValues([add]).setFontWeight('bold');
         });
       });
     },

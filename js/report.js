@@ -1,8 +1,8 @@
 // Reports: pure shaping helpers (Node-testable) + thin download wrappers over SheetJS / jsPDF.
 import { clientFilingSummary } from './aggregate.js';
+import { day } from './dom.js';
 
 const s = (v) => (v === undefined || v === null ? '' : String(v));
-const day = (v) => s(v).slice(0, 10);
 const dash = (v) => (s(v).trim() === '' ? '—' : s(v));
 const dashDay = (v) => (day(v) === '' ? '—' : day(v));
 

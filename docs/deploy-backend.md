@@ -56,6 +56,11 @@ Paste the `/exec` URL and `SCRIPT_TOKEN` into the front-end config (Task 6). The
 On first load the front end calls `bootstrapStatus`; with no users it shows the setup screen to create the Admin.
 The first request also creates any missing app tabs.
 
+**Schema upgrades:** on every request `ensureTabs` also compares each existing app tab's header row with the schema and
+*appends* any missing columns (e.g. the Filings `DueDate` column on a sheet deployed earlier), with the right text/number
+format. It never reorders or removes columns and only takes the script lock when it actually has to write. After pasting new
+code, deploy a new version and make any request; the new columns appear automatically.
+
 ## 7. Manual verification
     curl -L -H "Content-Type: text/plain" -d '{"action":"bootstrapStatus"}' "<EXEC_URL>"
 

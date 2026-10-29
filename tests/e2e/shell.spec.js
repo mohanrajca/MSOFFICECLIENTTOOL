@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const CONFIGURED = "export const CONFIG = { ENDPOINT_URL: 'https://stub.test/exec', TOKEN: 'tok' };";
+const CONFIGURED = "export const CONFIG = { ENDPOINT_URL: 'https://stub.test/exec', TOKEN: 'tok', SUITE_URL: 'https://suite.example/app' };";
 
 // Stub window.fetch (no real backend). needsSetup is controlled per page load.
 function stubFetch(needsSetup) {
@@ -45,7 +45,7 @@ test('setup -> authed dashboard shell, then reload shows login', async ({ page, 
   await expect(page.locator('.topbar')).toContainText('S. Mohanraj, ACS');
   await expect(page.locator('.topbar')).toContainText('Asha Rao');
   await expect(page.getByRole('link', { name: /GST Suite Pro/ })).toHaveAttribute('target', '_blank');
-  await expect(page.locator('.sidenav a')).toHaveCount(8);
+  await expect(page.locator('.sidenav a:not(.suite-nav)')).toHaveCount(8);
   await expect(page).toHaveURL(/#\/dashboard$/);
   await expect(page.locator('#view')).toContainText('Dashboard');
 
@@ -75,5 +75,5 @@ test('setup -> authed dashboard shell, then reload shows login', async ({ page, 
   await expect(page2.getByRole('alert')).toContainText('Incorrect username or password');
   await page2.fill('input[name=password]', 'goodpass1');
   await page2.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page2.locator('.sidenav a')).toHaveCount(8);
+  await expect(page2.locator('.sidenav a:not(.suite-nav)')).toHaveCount(8);
 });

@@ -2,7 +2,7 @@
 // balances, plus a month summary. Maths lives in ../balances.js (pure).
 import { apiCall, apiError } from '../api.js';
 import { registerView } from '../router.js';
-import { esc } from '../dom.js';
+import { esc, todayISO, day as dayOf } from '../dom.js';
 import { CATEGORIES, num, computeDayBalance, prevCloseFor, grandTotals } from '../balances.js';
 
 const CAT_CLASS = { 'Income Tax': 'it', GST: 'gst', Accounts: 'acc' };
@@ -10,15 +10,10 @@ const CAT_CLASS = { 'Income Tax': 'it', GST: 'gst', Accounts: 'acc' };
 export const inr = (n) => '₹' + num(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const int = (n) => Math.round(num(n)).toLocaleString('en-IN');
 
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 function addDays(iso, n) {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
 }
-const dayOf = (v) => String(v == null ? '' : v).slice(0, 10);
 
 const loadBalances = (before) => apiCall('listBalances', before ? { before } : {});
 
