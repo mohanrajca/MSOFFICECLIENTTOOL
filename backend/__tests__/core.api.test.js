@@ -33,6 +33,14 @@ describe('handle dispatch + token gate', () => {
   test('bad token is checked before unknown action', () => {
     expect(call(mk(), 'nope', { token: 'wrong' })).toEqual({ ok: false, error: 'bad_token' });
   });
+  test('fails closed when expectedToken is missing or empty', () => {
+    for (const expectedToken of [undefined, '']) {
+      const d = { ...deps, expectedToken };
+      expect(handle({ action: 'getMasters', payload: {} }, mk(), d)).toEqual({ ok: false, error: 'bad_token' });
+      expect(handle({ action: 'getMasters', token: '', payload: {} }, mk(), d)).toEqual({ ok: false, error: 'bad_token' });
+      expect(handle({ action: 'bootstrapStatus', payload: {} }, mk(), d).ok).toBe(true);
+    }
+  });
   test('bootstrapStatus works without a valid token', () => {
     expect(call(mk(), 'bootstrapStatus', { token: 'wrong' })).toEqual({ ok: true, data: { needsSetup: true } });
   });

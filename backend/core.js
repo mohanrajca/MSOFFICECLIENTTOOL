@@ -46,7 +46,9 @@ export function registerAction(name, fn, { public: isPublic = false } = {}) {
 export function handle(req, store, deps) {
   const { action } = req || {};
   const fn = Object.prototype.hasOwnProperty.call(ACTIONS, action) ? ACTIONS[action] : null;
-  if (!PUBLIC_ACTIONS.has(action) && (req || {}).token !== deps.expectedToken) {
+  // Fail closed: a missing/empty expectedToken rejects every non-public action.
+  const exp = deps && deps.expectedToken;
+  if (!PUBLIC_ACTIONS.has(action) && (typeof exp !== 'string' || exp === '' || (req || {}).token !== exp)) {
     return { ok: false, error: 'bad_token' };
   }
   if (!fn) return { ok: false, error: 'unknown_action' };
