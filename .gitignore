@@ -1,0 +1,8 @@
+node_modules/
+.superpowers/
+coverage/
+test-results/
+playwright-report/
+dist/
+*.log
+.DS_Store
