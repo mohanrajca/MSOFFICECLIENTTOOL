@@ -55,3 +55,5 @@ export function matchClientPassword(canonicalClient, gstUserName, passwordMap) {
   if (has(byUser)) return passwordMap[byUser];
   return null;
 }
+
+globalThis.SheetMapping = { CLIENT_HEADERS, normalizeName, clientRowToCanonical, currentPasswordMap, matchClientPassword };

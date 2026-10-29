@@ -20,6 +20,26 @@ function hex_(bytes) {
   return bytes.map(function (b) { return ('0' + (b < 0 ? b + 256 : b).toString(16)).slice(-2); }).join('');
 }
 
+// READ-ONLY import source for the one-time legacy import: raw rows of the firm's
+// CLIENT and CURRENT tabs, keyed by trimmed header. Never writes those tabs.
+// A missing tab yields an empty array.
+function readLegacyTab_(name) {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+  if (!sh) return [];
+  var values = sh.getDataRange().getValues();
+  if (values.length < 2) return [];
+  var headers = values[0].map(function (h) { return String(h).trim(); });
+  return values.slice(1).map(function (row) {
+    var o = {};
+    headers.forEach(function (h, i) { if (h) o[h] = row[i]; });
+    return o;
+  });
+}
+
+function importSource_() {
+  return { clientRows: readLegacyTab_('CLIENT'), currentRows: readLegacyTab_('CURRENT') };
+}
+
 function buildDeps_() {
   var props = PropertiesService.getScriptProperties();
   return {
@@ -32,6 +52,7 @@ function buildDeps_() {
     },
     expectedToken: props.getProperty('SCRIPT_TOKEN') || '',
     sessionSecret: props.getProperty('SESSION_SECRET') || '',
+    importSource: importSource_,
   };
 }
 

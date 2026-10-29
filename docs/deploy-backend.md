@@ -26,6 +26,7 @@ because top-level `const` is not auto-attached to `globalThis` in Apps Script.
 1. Open the **MS FILE STATUS** spreadsheet, then **Extensions > Apps Script**.
 2. Add these files to the one project (names matter only for readability; all share one global scope):
    - `core.gs` (paste `dist/core.gs`)
+   - `sheet-mapping.gs` (paste `dist/sheet-mapping.gs`; needed by the one-time legacy import)
    - `store-sheets.gs` (from `backend/`)
    - `Code.gs` (from `backend/`; replace the default `Code.gs`)
 3. Project Settings > tick **Show "appsscript.json" manifest file**, then replace its contents with `backend/appsscript.json`

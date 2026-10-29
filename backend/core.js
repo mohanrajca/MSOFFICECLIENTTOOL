@@ -312,6 +312,34 @@ defineCrud('Visitors', { list: 'listVisitors', upsert: 'upsertVisitor' }, {
   },
 });
 
+// ---- One-time legacy import (Admin) --------------------------------------
+// deps.importSource() -> {clientRows, currentRows}: RAW rows of the firm's CLIENT and
+// CURRENT tabs (read-only). Clients are upserted by ClientID (idempotent). GST passwords
+// are returned in PLAINTEXT to the Admin's browser, which alone can encrypt them; this
+// action never writes Credentials and never writes the CLIENT/CURRENT tabs.
+// sheet-mapping.js registers globalThis.SheetMapping (a separate file in Apps Script).
+registerAction('importLegacy', (req, store, deps) => {
+  if (!requireAdmin(req, store, deps)) return FORBIDDEN;
+  const M = globalThis.SheetMapping;
+  if (!deps || typeof deps.importSource !== 'function' || !M) return { ok: false, error: 'import_unavailable' };
+  const src = deps.importSource() || {};
+  const passwords = M.currentPasswordMap(src.currentRows || []);
+  const matches = [];
+  const unmatched = [];
+  let clientsImported = 0;
+  for (const row of src.clientRows || []) {
+    const c = M.clientRowToCanonical(row);
+    if (!c.ClientID) { if (c.Name) unmatched.push(c.Name); continue; }
+    const { gstUserName, ...client } = c;
+    upsertById(store, 'Clients', client);
+    clientsImported++;
+    const pw = M.matchClientPassword(client, gstUserName, passwords);
+    if (pw === null || pw === '' || !gstUserName) unmatched.push(client.Name || client.ClientID);
+    else matches.push({ ClientID: client.ClientID, Name: client.Name, Portal: 'GST', LoginID: gstUserName, password: pw });
+  }
+  return { clientsImported, matches, unmatched };
+});
+
 registerAction('getDayBalance', (req, store, deps) => {
   if (!anySession(req, store, deps)) return FORBIDDEN;
   const { date } = payloadOf(req);

@@ -59,3 +59,16 @@ code { background: var(--bg); padding: 1px 6px; border-radius: 6px; }
   .sidenav { display: none; }
   .layout.nav-open .sidenav { display: flex; }
 }
+
+/* vault */
+.vault-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.vault-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vault-client { margin-top: 18px; }
+.vault-client h3 { margin: 0 0 6px; }
+.vault-table { width: 100%; border-collapse: collapse; }
+.vault-table th, .vault-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+.vault-form, .vault-summary { background: var(--bg); border-radius: var(--radius); padding: 14px 16px; margin: 12px 0; }
+.vault-form select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font: inherit; }
+.vault-gate { max-width: 420px; }
+.pw-plain { margin-right: 8px; user-select: all; }
+@media (max-width: 760px) { .vault-table { display: block; overflow-x: auto; } }
